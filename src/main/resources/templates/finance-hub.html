@@ -1,0 +1,632 @@
+﻿<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .hub-shell {
+            padding-top: calc(var(--nav-offset, 92px) + 1rem);
+            position: relative;
+            z-index: 1;
+        }
+        .hub-shell::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto auto 0;
+            width: 100%;
+            height: 240px;
+            background: radial-gradient(80% 80% at 0% 0%, rgba(20, 184, 166, 0.18), rgba(20, 184, 166, 0));
+            pointer-events: none;
+            z-index: -1;
+        }
+        .hero-card {
+            border-radius: 20px;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            background: linear-gradient(120deg, #0f766e 0%, #115e59 48%, #1d4ed8 100%);
+            color: #f8fafc;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+        }
+        .hero-card .btn-light { color: #0f172a; font-weight: 600; }
+        .soft-card {
+            border: 1px solid rgba(15, 23, 42, 0.06);
+            border-radius: 16px;
+            box-shadow: 0 14px 32px rgba(15, 23, 42, .08);
+        }
+        .kpi-title { font-size: .75rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
+        .kpi-value { font-size: 1.6rem; font-weight: 700; color: #0f172a; }
+        .section-title { font-weight: 700; color: #0f172a; }
+        .pill { border-radius: 999px; font-size: .75rem; }
+        .tab-content { padding-top: 1rem; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .mini-chart { max-height: 260px; }
+        .nav-pills .nav-link {
+            border-radius: 999px;
+            color: #334155;
+            background: #f1f5f9;
+            border: 1px solid transparent;
+            font-weight: 600;
+        }
+        .nav-pills .nav-link.active {
+            background: #0f766e;
+            color: #f8fafc;
+            border-color: #0f766e;
+            box-shadow: 0 8px 16px rgba(15, 118, 110, 0.32);
+        }
+        .split-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        @media (max-width: 991.98px) {
+            .split-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body class="app-theme">
+<div th:replace="fragments/navbar :: navbar('no', 'no', 'no', 'yes', 'yes', 'yes')"></div>
+
+<div class="container hub-shell pb-5">
+    <div class="hero-card p-4 p-lg-5 mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h3 class="mb-2">Finance Hub</h3>
+                <div class="mb-0">Plan budgets, automate recurring expenses, track goals, and monitor insights in one place.</div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-light" th:href="@{/calendar-view}">Calendar View</a>
+                <button class="btn btn-outline-light" id="runRecurringBtn">Run Recurring Now</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4" id="kpiGrid">
+        <div class="col-md-3"><div class="card soft-card"><div class="card-body"><div class="kpi-title">This Month</div><div class="kpi-value" id="kpiCurrentTotal">-</div></div></div></div>
+        <div class="col-md-3"><div class="card soft-card"><div class="card-body"><div class="kpi-title">Last Month</div><div class="kpi-value" id="kpiPreviousTotal">-</div></div></div></div>
+        <div class="col-md-3"><div class="card soft-card"><div class="card-body"><div class="kpi-title">Change</div><div class="kpi-value" id="kpiChange">-</div></div></div></div>
+        <div class="col-md-3"><div class="card soft-card"><div class="card-body"><div class="kpi-title">Unread Alerts</div><div class="kpi-value" id="kpiUnread">-</div></div></div></div>
+    </div>
+
+    <div class="card soft-card mb-4">
+        <div class="card-body">
+            <ul class="nav nav-pills gap-2" id="hubTabs" role="tablist">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-overview" type="button">Overview</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-automation" type="button">Automation</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-planning" type="button">Planning</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-split" type="button">Shared Split</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-alerts" type="button">Alerts</button></li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="tab-overview">
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <h6 class="section-title">Monthly Trend</h6>
+                            <canvas id="trendChart" class="mini-chart"></canvas>
+                        </div>
+                        <div class="col-lg-6">
+                            <h6 class="section-title">Category Distribution</h6>
+                            <canvas id="categoryChart" class="mini-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <h6 class="section-title">Dashboard Payload</h6>
+                        <pre id="dashboardPreview" class="mono bg-light p-3 rounded" style="white-space: pre-wrap;"></pre>
+                    </div>
+                    <div class="mt-4">
+                        <h6 class="section-title">Recent Activity</h6>
+                        <div id="recentExpenseList" class="list-group"></div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-automation">
+                    <div class="row g-3">
+                        <div class="col-lg-7">
+                            <h6 class="section-title">Create Recurring Expense</h6>
+                            <form id="recurringForm" class="row g-2">
+                                <div class="col-md-6"><input class="form-control" name="description" placeholder="Description" required></div>
+                                <div class="col-md-3"><input class="form-control" name="amount" type="number" min="1" placeholder="Amount" required></div>
+                                <div class="col-md-3">
+                                    <select class="form-control" name="category">
+                                        <option value="groceries">Groceries</option><option value="Utilities(bills)">Utilities</option>
+                                        <option value="transportation">Transportation</option><option value="dining out">Dining Out</option>
+                                        <option value="entertainment">Entertainment</option><option value="shopping">Shopping</option>
+                                        <option value="travel">Travel</option><option value="education">Education</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4"><select class="form-control" name="frequency"><option>DAILY</option><option>WEEKLY</option><option>MONTHLY</option></select></div>
+                                <div class="col-md-4"><input class="form-control" name="nextExecutionDate" type="date" required></div>
+                                <div class="col-md-4"><button class="btn btn-primary w-100">Save Recurring</button></div>
+                            </form>
+                        </div>
+                        <div class="col-lg-5">
+                            <h6 class="section-title">Current Rules</h6>
+                            <div class="list-group" id="recurringList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-planning">
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <h6 class="section-title">Budget Setup</h6>
+                            <form id="budgetForm" class="row g-2 mb-3">
+                                <div class="col-md-5"><select class="form-control" name="category"><option value="groceries">Groceries</option><option value="Utilities(bills)">Utilities</option><option value="transportation">Transportation</option><option value="dining out">Dining Out</option><option value="entertainment">Entertainment</option><option value="shopping">Shopping</option><option value="travel">Travel</option><option value="education">Education</option></select></div>
+                                <div class="col-md-4"><input class="form-control" name="monthKey" type="month" required></div>
+                                <div class="col-md-3"><input class="form-control" name="limitAmount" type="number" min="1" placeholder="Limit" required></div>
+                                <div class="col-12"><button class="btn btn-outline-primary">Save Budget</button></div>
+                            </form>
+                            <div id="budgetStatus"></div>
+                        </div>
+                        <div class="col-lg-6">
+                            <h6 class="section-title">Savings Goals</h6>
+                            <form id="goalForm" class="row g-2 mb-3">
+                                <div class="col-md-5"><input class="form-control" name="name" placeholder="Goal" required></div>
+                                <div class="col-md-3"><input class="form-control" name="targetAmount" type="number" min="1" placeholder="Target" required></div>
+                                <div class="col-md-4"><input class="form-control" name="deadline" type="date"></div>
+                                <div class="col-12"><button class="btn btn-outline-success">Create Goal</button></div>
+                            </form>
+                            <div id="goalList"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-split">
+                    <div class="split-grid">
+                        <div class="card soft-card">
+                            <div class="card-body">
+                                <h6 class="section-title">Create Split Group</h6>
+                                <form id="splitGroupForm" class="d-flex gap-2 mb-3">
+                                    <input class="form-control" name="name" placeholder="Group name" required>
+                                    <button class="btn btn-outline-primary">Create</button>
+                                </form>
+                                <div id="splitGroups" class="list-group"></div>
+                            </div>
+                        </div>
+                        <div class="card soft-card">
+                            <div class="card-body">
+                                <h6 class="section-title">Add Group Member</h6>
+                                <form id="splitMemberForm" class="row g-2 mb-2">
+                                    <div class="col-5"><input class="form-control" name="groupId" type="number" min="1" placeholder="Group ID" required></div>
+                                    <div class="col-5"><input class="form-control" name="memberClientId" type="number" min="1" placeholder="Member Client ID" required></div>
+                                    <div class="col-2"><button class="btn btn-outline-primary w-100">Add</button></div>
+                                </form>
+                                <small class="text-muted">Tip: click a group in the list to auto-fill group ID.</small>
+                            </div>
+                        </div>
+                        <div class="card soft-card">
+                            <div class="card-body">
+                                <h6 class="section-title">Add Shared Expense</h6>
+                                <form id="splitExpenseForm" class="row g-2">
+                                    <div class="col-md-4"><input class="form-control" name="groupId" type="number" min="1" placeholder="Group ID" required></div>
+                                    <div class="col-md-4"><input class="form-control" name="paidByClientId" type="number" min="1" placeholder="Paid By Client ID" required></div>
+                                    <div class="col-md-4"><input class="form-control" name="totalAmount" type="number" min="1" placeholder="Total Amount" required></div>
+                                    <div class="col-12"><input class="form-control" name="description" placeholder="Description"></div>
+                                    <div class="col-12"><input class="form-control" name="splitClientIds" placeholder="Split member IDs (comma separated) e.g. 2,3,4" required></div>
+                                    <div class="col-12"><button class="btn btn-outline-success w-100">Save Shared Expense</button></div>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="card soft-card">
+                            <div class="card-body">
+                                <h6 class="section-title">Group Balances</h6>
+                                <form id="splitBalanceForm" class="d-flex gap-2 mb-3">
+                                    <input class="form-control" name="groupId" type="number" min="1" placeholder="Group ID" required>
+                                    <button class="btn btn-outline-secondary">Load</button>
+                                </form>
+                                <div id="splitBalances" class="list-group"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-alerts">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="section-title mb-0">Notifications</h6>
+                        <button class="btn btn-sm btn-outline-secondary" id="markAllReadBtn">Mark All Read</button>
+                    </div>
+                    <div id="notificationList" class="list-group mb-4"></div>
+
+                    <h6 class="section-title">Rule-based Insights</h6>
+                    <ul id="insightList" class="list-group"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="position-fixed top-0 end-0 p-3" style="z-index: 1080">
+    <div id="hubToast" class="toast text-bg-dark border-0" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="hubToastBody">Done</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script th:src="@{/js/scripts.js}"></script>
+<script>
+    let trendChartRef = null;
+    let categoryChartRef = null;
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+
+    const toastEl = document.getElementById('hubToast');
+    const toast = new bootstrap.Toast(toastEl);
+    function notify(msg) {
+        document.getElementById('hubToastBody').textContent = msg;
+        toast.show();
+    }
+
+    function parseSplitIds(text) {
+        return (text || '')
+            .split(',')
+            .map(v => Number(v.trim()))
+            .filter(v => Number.isInteger(v) && v > 0);
+    }
+
+    function formatInr(value) {
+        const amount = Number(value || 0);
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            maximumFractionDigits: 0
+        }).format(amount);
+    }
+
+    async function api(url, options = {}, fallbackValue = null) {
+        const response = await fetch(url, { ...options, headers: { 'Accept': 'application/json', ...(options.headers || {}) } });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || ('Request failed: ' + response.status + ' @ ' + url));
+        }
+        const type = response.headers.get('content-type') || '';
+        if (type.includes('application/json')) return response.json();
+        return fallbackValue;
+    }
+
+    function asList(value) {
+        return Array.isArray(value) ? value : [];
+    }
+
+    function asObject(value) {
+        return value && typeof value === 'object' ? value : {};
+    }
+
+    function renderChart(canvasId, labels, data, label, refName) {
+        if (!window.Chart) return;
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        if (refName === 'trend' && trendChartRef) trendChartRef.destroy();
+        if (refName === 'category' && categoryChartRef) categoryChartRef.destroy();
+        const chart = new Chart(canvas, {
+            type: 'bar',
+            data: { labels, datasets: [{ label, data, backgroundColor: 'rgba(15,118,110,.72)', borderRadius: 10 }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+        if (refName === 'trend') trendChartRef = chart;
+        if (refName === 'category') categoryChartRef = chart;
+    }
+
+    async function loadOverview() {
+        const [trendRaw, categoriesRaw, comparisonRaw, unreadRaw] = await Promise.all([
+            api('/api/dashboard/monthly-trend'),
+            api('/api/dashboard/category-distribution'),
+            api('/api/dashboard/month-comparison'),
+            api('/api/notifications/unread-count')
+        ]);
+        const trend = asObject(trendRaw);
+        const categories = asObject(categoriesRaw);
+        const comparison = asObject(comparisonRaw);
+        const unread = unreadRaw ?? 0;
+
+        document.getElementById('kpiCurrentTotal').textContent = formatInr(comparison.currentTotal ?? 0);
+        document.getElementById('kpiPreviousTotal').textContent = formatInr(comparison.previousTotal ?? 0);
+        document.getElementById('kpiChange').textContent = (comparison.changePercent ?? 0) + '%';
+        document.getElementById('kpiUnread').textContent = unread;
+
+        document.getElementById('dashboardPreview').textContent = JSON.stringify({
+            monthlyTrend: trend,
+            categoryDistribution: categories,
+            monthComparison: comparison
+        }, null, 2);
+
+        renderChart('trendChart', Object.keys(trend), Object.values(trend), 'Monthly Trend', 'trend');
+        renderChart('categoryChart', Object.keys(categories), Object.values(categories), 'Category Distribution', 'category');
+
+        const recent = asList(await api('/api/dashboard/recent-expenses', {}, []));
+        const recentRoot = document.getElementById('recentExpenseList');
+        recentRoot.innerHTML = '';
+        recent.forEach(exp => {
+            recentRoot.insertAdjacentHTML('beforeend', `<div class="list-group-item d-flex justify-content-between"><span>${exp.description || 'Expense'} - ${formatInr(exp.amount)}</span><small class="text-muted">${exp.dateTime || ''}</small></div>`);
+        });
+        if (!recent.length) recentRoot.innerHTML = '<div class="list-group-item text-muted">No recent expenses.</div>';
+    }
+
+    async function loadRecurring() {
+        const data = asList(await api('/api/recurring', {}, []));
+        const list = document.getElementById('recurringList');
+        list.innerHTML = '';
+        data.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'list-group-item d-flex justify-content-between align-items-center';
+            el.innerHTML = `<div><strong>${item.description || '(no description)'}</strong><div class="text-muted">${formatInr(item.amount)} | ${item.category} | next ${item.nextExecutionDate}</div></div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge ${item.active ? 'text-bg-success' : 'text-bg-secondary'} pill">${item.frequency}</span>
+                                <button class="btn btn-sm btn-outline-secondary" data-toggle-id="${item.id}" data-active="${item.active}">
+                                    ${item.active ? 'Pause' : 'Resume'}
+                                </button>
+                            </div>`;
+            list.appendChild(el);
+        });
+        list.querySelectorAll('button[data-toggle-id]').forEach(btn => btn.addEventListener('click', async () => {
+            try {
+                const active = btn.dataset.active !== 'true';
+                await api('/api/recurring/' + btn.dataset.toggleId + '/toggle', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({active})
+                });
+                await loadRecurring();
+                notify('Recurring rule updated');
+            } catch (error) {
+                notify('Could not update recurring rule');
+                console.error(error);
+            }
+        }));
+        if (!data.length) list.innerHTML = '<div class="list-group-item text-muted">No recurring rules yet.</div>';
+    }
+
+    async function loadBudgets(monthKey) {
+        const key = monthKey && monthKey.length === 7 ? monthKey : currentMonthKey;
+        const status = asList(await api('/api/budgets/status?monthKey=' + encodeURIComponent(key), {}, []));
+        const root = document.getElementById('budgetStatus');
+        root.innerHTML = '';
+        status.forEach(b => {
+            const pct = Math.min(100, b.progressPercent || 0);
+            const bar = `<div class="mb-2"><div class="d-flex justify-content-between"><span>${b.category}</span><span>${formatInr(b.spentAmount)}/${formatInr(b.limitAmount)}</span></div>
+                         <div class="progress"><div class="progress-bar ${b.exceeded ? 'bg-danger' : 'bg-success'}" style="width:${pct}%"></div></div></div>`;
+            root.insertAdjacentHTML('beforeend', bar);
+        });
+        if (!status.length) root.innerHTML = '<div class="text-muted">No budgets configured for this month.</div>';
+    }
+
+    async function loadGoals() {
+        const goals = asList(await api('/api/goals', {}, []));
+        const root = document.getElementById('goalList');
+        root.innerHTML = '';
+        goals.forEach(g => {
+            root.insertAdjacentHTML('beforeend', `<div class="border rounded p-2 mb-2"><strong>${g.name}</strong>
+                    <div class="text-muted">Target: ${formatInr(g.targetAmount)} | Progress: ${g.progressPercent}% | Projected saved: ${formatInr(g.projectedSavedAmount)}</div></div>`);
+        });
+        if (!goals.length) root.innerHTML = '<div class="text-muted">No savings goals yet.</div>';
+    }
+
+    async function loadNotifications() {
+        const data = await api('/api/notifications?page=0&size=15', {}, { content: [] });
+        const root = document.getElementById('notificationList');
+        root.innerHTML = '';
+        asList(data.content).forEach(n => {
+            const row = document.createElement('div');
+            row.className = 'list-group-item d-flex justify-content-between align-items-start';
+            row.innerHTML = `<div><div>${n.message}</div><small class="text-muted">${n.type} • ${n.timestamp}</small></div>
+                             ${n.read ? '<span class="badge text-bg-secondary pill">Read</span>' : `<button class="btn btn-sm btn-link" data-id="${n.id}">Mark read</button>`}`;
+            root.appendChild(row);
+        });
+        root.querySelectorAll('button[data-id]').forEach(btn => btn.addEventListener('click', async () => {
+            try {
+                await api('/api/notifications/' + btn.dataset.id + '/read', { method: 'POST' });
+                await loadNotifications();
+                notify('Notification updated');
+            } catch (error) {
+                notify('Could not mark notification');
+                console.error(error);
+            }
+        }));
+        if (!asList(data.content).length) {
+            root.innerHTML = '<div class="list-group-item text-muted">No notifications yet.</div>';
+        }
+    }
+
+    async function loadInsights() {
+        const insights = asList(await api('/api/dashboard/insights', {}, []));
+        const root = document.getElementById('insightList');
+        root.innerHTML = '';
+        insights.forEach(i => root.insertAdjacentHTML('beforeend', `<li class="list-group-item">${i}</li>`));
+        if (!insights.length) root.innerHTML = '<li class="list-group-item text-muted">No insights available yet.</li>';
+    }
+
+    async function loadSplitGroups() {
+        const groups = asList(await api('/api/split/groups', {}, []));
+        const root = document.getElementById('splitGroups');
+        root.innerHTML = '';
+        groups.forEach(g => root.insertAdjacentHTML('beforeend', `<button type="button" class="list-group-item list-group-item-action d-flex justify-content-between" data-group-id="${g.id}" data-group-name="${g.name}"><span>${g.name}</span><span class="text-muted mono">#${g.id}</span></button>`));
+        if (!groups.length) root.innerHTML = '<div class="list-group-item text-muted">No split groups yet.</div>';
+        root.querySelectorAll('[data-group-id]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const groupId = btn.getAttribute('data-group-id');
+                const memberGroup = document.querySelector('#splitMemberForm [name="groupId"]');
+                const expenseGroup = document.querySelector('#splitExpenseForm [name="groupId"]');
+                const balanceGroup = document.querySelector('#splitBalanceForm [name="groupId"]');
+                if (memberGroup) memberGroup.value = groupId;
+                if (expenseGroup) expenseGroup.value = groupId;
+                if (balanceGroup) balanceGroup.value = groupId;
+                notify('Group #' + groupId + ' selected');
+            });
+        });
+    }
+
+    async function loadSplitBalances(groupId) {
+        if (!groupId || Number(groupId) <= 0) return;
+        const data = asObject(await api('/api/split/groups/' + Number(groupId) + '/balances', {}, {}));
+        const root = document.getElementById('splitBalances');
+        root.innerHTML = '';
+        const entries = Object.entries(data);
+        entries.forEach(([clientId, amount]) => {
+            const tone = Number(amount) >= 0 ? 'success' : 'danger';
+            root.insertAdjacentHTML('beforeend', `<div class="list-group-item d-flex justify-content-between"><span>Client #${clientId}</span><span class="badge text-bg-${tone}">${formatInr(amount)}</span></div>`);
+        });
+        if (!entries.length) root.innerHTML = '<div class="list-group-item text-muted">No balances yet for this group.</div>';
+    }
+
+    document.getElementById('recurringForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            payload.amount = Number(payload.amount);
+            await api('/api/recurring', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            e.target.reset();
+            await loadRecurring();
+            notify('Recurring expense saved');
+        } catch (error) {
+            notify('Could not save recurring expense');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('budgetForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            payload.limitAmount = Number(payload.limitAmount);
+            await api('/api/budgets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            await loadBudgets(payload.monthKey);
+            notify('Budget updated');
+        } catch (error) {
+            notify('Could not save budget');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('goalForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            payload.targetAmount = Number(payload.targetAmount);
+            await api('/api/goals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            e.target.reset();
+            await loadGoals();
+            notify('Savings goal created');
+        } catch (error) {
+            notify('Could not create savings goal');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('splitGroupForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            await api('/api/split/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            e.target.reset();
+            await loadSplitGroups();
+            notify('Split group created');
+        } catch (error) {
+            notify('Could not create split group');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('splitMemberForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            const groupId = Number(payload.groupId);
+            const memberClientId = Number(payload.memberClientId);
+            await api('/api/split/groups/' + groupId + '/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memberClientId })
+            });
+            notify('Member added to group #' + groupId);
+        } catch (error) {
+            notify('Could not add member');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('splitExpenseForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            const splitClientIds = parseSplitIds(payload.splitClientIds);
+            if (!splitClientIds.length) {
+                notify('Enter at least one valid split member ID');
+                return;
+            }
+            const req = {
+                groupId: Number(payload.groupId),
+                paidByClientId: Number(payload.paidByClientId),
+                description: payload.description,
+                totalAmount: Number(payload.totalAmount),
+                splitClientIds
+            };
+            await api('/api/split/expenses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(req)
+            });
+            notify('Shared expense added');
+            await loadSplitBalances(req.groupId);
+        } catch (error) {
+            notify('Could not add shared expense');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('splitBalanceForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const payload = Object.fromEntries(new FormData(e.target).entries());
+            await loadSplitBalances(Number(payload.groupId));
+            notify('Balances loaded');
+        } catch (error) {
+            notify('Could not load balances');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('markAllReadBtn')?.addEventListener('click', async () => {
+        try {
+            await api('/api/notifications/mark-all-read', { method: 'POST' });
+            await loadNotifications();
+            await loadOverview();
+            notify('All notifications marked as read');
+        } catch (error) {
+            notify('Could not mark notifications');
+            console.error(error);
+        }
+    });
+
+    document.getElementById('runRecurringBtn')?.addEventListener('click', async () => {
+        try {
+            const result = await api('/api/recurring/run-now', { method: 'POST' }, {});
+            notify('Recurring execution complete: ' + (result?.createdExpenses ?? 0) + ' created');
+            await Promise.all([loadRecurring(), loadOverview(), loadNotifications()]);
+        } catch (error) {
+            notify('Recurring execution failed');
+            console.error(error);
+        }
+    });
+
+    (async function init() {
+        const budgetMonthInput = document.querySelector('#budgetForm [name="monthKey"]');
+        if (budgetMonthInput && !budgetMonthInput.value) {
+            budgetMonthInput.value = currentMonthKey;
+        }
+
+        const loaders = [loadOverview, loadRecurring, loadBudgets, loadGoals, loadNotifications, loadInsights, loadSplitGroups];
+        const results = await Promise.allSettled(loaders.map(fn => fn()));
+        if (results.some(r => r.status === 'rejected')) {
+            notify('Some panels failed to load. Data is partially available.');
+            console.error(results);
+        }
+    })();
+</script>
+</body>
+</html>
